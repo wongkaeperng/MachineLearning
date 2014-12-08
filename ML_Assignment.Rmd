@@ -1,0 +1,94 @@
+Executive Summary
+==================
+This project involves predicting the manner in which participant did the exercise (classe dependent variable) using data from accelerometers. In order to prevent overfitting, the training data set is split into 70% training, 30% for cross validation. 
+
+Random forest is used to build the model and an accuracy of 96.3% is achieved on the training data set and an accuracy of 97.8% is achieved on the testing data set.
+
+Preprocessing Data
+==================
+```{r}
+# Download file into Working Directory and Load them.
+training <- read.csv(file = "pml-training.csv",header = TRUE, sep = ",")
+testing <- read.csv(file = "pml-testing.csv",header = TRUE, sep = ",")
+# Delete entire NA columns
+del_na_cols <- function(x) { x[ , colSums( is.na(x) ) < nrow(x) ] }
+training <- del_na_cols(training)
+# Remove variables with NA
+remove_na <- function(x) {x[,sapply(x, function(y) !any(is.na(y)))] }
+training <- remove_na(training)
+```
+
+Prepare Cross Validation Data
+=============================
+```{r}
+library(caret)
+inTrain <- createDataPartition(y = training$classe, p = 0.7, list = FALSE)
+training2 <- training[inTrain, ]
+cross_validation <- training[-inTrain, ]
+```
+
+Data Exploration
+=================
+```{r}
+# Explore Correlations of Independent Variables vs Dependant Variables using Feature Plot
+featurePlot(x=training2[,c("roll_belt","pitch_forearm","yaw_belt","magnet_dumbbell_y","pitch_belt", "magnet_dumbbell_z", "roll_forearm", "accel_dumbbell_y", "roll_dumbbell", "magnet_dumbbell_x")],y=training$classe,plot="pairs")
+```
+
+Random Forest Prediction Model
+==============================
+From the data exploration, select the independent variables that show relationship / association with classe as a subset. This is so as putting all variables into the rain forest model took too much time.
+
+```{r}
+subsetTrainingData <- subset(training2,select=c(roll_belt, pitch_forearm, yaw_belt, magnet_dumbbell_y, pitch_belt, magnet_dumbbell_z, roll_forearm, accel_dumbbell_y, roll_dumbbell, magnet_dumbbell_x,classe))
+```
+
+From the small subset, build the random forest model:
+```{r}
+library(randomForest)
+# setting control variable to build the Random Forest
+ctrl <- trainControl(method="cv", number=2)
+# building the model
+set.seed(1234)
+Model <- train(classe ~ ., data=subsetTrainingData[inTrain,], model="rf", trControl=ctrl)
+Model
+```
+
+Using mtry=6, accuracy achieved 96.3%. 
+
+Run Model with Cross Validation
+================================
+Run Model with Cross Validation dataset (30% of training data)
+
+```{r}
+testCrossVal <- predict(Model, cross_validation)
+confusionMatrix(cross_validation$classe, testCrossVal)
+```
+
+Accuracy is 97.8%.
+
+Predict with Test Data
+======================
+Next, we run the model with test data.
+```{r}
+predictTest <- predict(Model, testing)
+predictTest
+```
+
+Write the Predictions to File
+=============================
+```{r}
+# Function to write a vector to files
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_", i ,".txt")
+    write.table(x[i], file = filename, quote = FALSE,
+                row.names = FALSE, col.names = FALSE)
+  }
+}
+```
+
+Conclusion
+==========
+The accuracy of the prediction model on the cross validation dataset is high at 97.91%. This suggests a very accurate model. To further improve the model, perhaps one can impute the missing values instead of removing them like what we had done.
+
